@@ -8,8 +8,7 @@ import random
 import argparse 
 from tqdm import tqdm
 from math import floor
-from numpy import linalg
-import copy
+
 
 class Data():
     def __init__(self,name):
@@ -35,7 +34,7 @@ def get_cov(data):
     cov = np.zeros(shape=(n,n))
     return np.cov(data)
 
-def compute_stats(totlen,tau,history):    
+def compute_stats(totlen,tau,history,k):    
     Sigma = []
     ExpectedReturn = []
     for k in range(floor(totlen/tau)):
@@ -50,11 +49,9 @@ def eigen_decomposition(steps,covariance,Nassets):
     L = []
     H = []
     for k in range(steps):
-        Ltmp, Htmp = linalg.eigh(covariance[k])
-        
+        Ltmp, Htmp = np.linalg.eigh(covariance[k])
         L.append(Ltmp[::-1])                                                 # discending order
         H.append(Htmp[:,::-1])                                               # discending order
-    
         assert(np.sum([a>0 for a in L[k]]))                                  # healthy covariance check. Positive definite.
         assert(np.sum(np.transpose(H[k]).dot(H[k]))-Nassets < 10**-10)       # orthonormality check. 
         assert(np.sum(np.transpose(H[k]).dot(covariance[k].dot(H[k])) - np.diag(L[k])) < 10**-10)
@@ -69,14 +66,35 @@ def normalization(steps,Nassets,L,H):
             H[k][:,i]=H[k][:,i]/(np.transpose(H[k][:,i]).dot(np.ones(Nassets)))
         SigmaP.append(np.transpose(H[k]).dot(Sigma[k].dot(H[k])))
         assert(np.sum([l < 10**-10 for l in LP[k] - np.diag(SigmaP[k])])-Nassets < 10**-10)
-    return LP, SigmaP
+    return LP, H
 
 def get_sharpe_ratio(steps,Nassets,H,ExpectedReturn,L):
-    SR = []
+    sr = []
     for k in range(steps):
         for i in range(Nassets):
-            SR.append(H[k][:,i]*ExpectedReturn[k]/np.sqrt(L[k][i])) 
-    return SR
+            sr.append(H[k][:,i]*ExpectedReturn[k]/np.sqrt(L[k][i])) 
+    return sr
+
+def ucb(R,t,N,tau):
+    ca = float("inf")
+    d = [np.sqrt(float(2*np.log(t+tau)/(tau+N[i]))) if N[i]!=0 else ca for i in range(len(N))]
+    return np.random.choice(np.flatnonzero((R+d)==np.max(R+d)))
+            
+def split_assets(Nsign,steps,sr,L,H):
+    sr_sign   = []
+    sr_insign = []
+    L_sign    = []
+    L_insign  = []
+    H_sign    = []
+    H_insign  = []
+    for k in range(steps):
+        sr_sign.append(sr[k][:Nsign])
+        sr_insign.append(sr[k][Nsign:])
+        L_sign.append(L[k][:Nsign])
+        L_insign.append(L[k][Nsign:])
+        H_sign.append(H[k][:,:Nsign])
+        H_insign.append(H[k][:,Nsign:])
+    return sr_sign,sr_insign,L_sign,L_insign,H_sign,H_insign
 
 if __name__=="__main__":
     print("#"*20)
@@ -96,7 +114,7 @@ if __name__=="__main__":
     time   = int(floor(totlen/tau))
     Nassets = len(ticker)
     print("inference time steps: {} ".format(time))
-    
+
     Sigma,ExpectedReturn = compute_stats(
                                 totlen=totlen,
                                 tau=tau,
@@ -107,16 +125,42 @@ if __name__=="__main__":
                         covariance=Sigma,
                         Nassets=Nassets)
 
-    LP, SigmaP = normalization(
+    LP, HP = normalization(
                         steps=time,
                         Nassets=Nassets,
                         L=L,
                         H=H)
 
-    SR = get_sharpe_ratio(
+    sr = get_sharpe_ratio(
                     steps=time,
                     Nassets=Nassets,
                     H=H,
                     ExpectedReturn=ExpectedReturn,
                     L=LP)
-    print(SR)
+    
+    Nsign=2
+    sr_sign, sr_insign, LP_sign, LP_insign, H_sign, H_insign = split_assets(Nsign=Nsign, steps=time, sr=sr, L=LP, H=HP)
+    sets = [sr_sign, sr_insign]
+
+    best_assets = []
+    for s in sets: 
+        best_i = []
+        N = np.zeros(len(s[0]))
+        for k in range(time): 
+            i = ucb(R=s[k],t=k,N=N,tau=tau)
+            N[i]+=1
+            best_i.append(i)
+        best_assets.append(best_i)
+
+    theta = []
+    w = []
+    for k in range(time):
+        theta = LP_sign[k][best_assets[0][k]]/(LP_sign[k][best_assets[0][k]] + LP_insign[k][best_assets[1][k]])
+        m = (1-theta)*H_sign[k][:,best_assets[0][k]] + theta*H_insign[k][:,best_assets[1][k]]
+        w.append(m)
+    
+    mu = []
+    k=0
+    kp1 = k*tau + tau
+    mu.append(np.sum(w[k]*history[kp1]) - 1.0) 
+    print(mu)
