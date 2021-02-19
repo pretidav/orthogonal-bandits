@@ -8,6 +8,7 @@ import random
 import argparse 
 from tqdm import tqdm
 from math import floor
+from numpy import linalg
 
 class Data():
     def __init__(self,name):
@@ -21,7 +22,7 @@ class Data():
         self.time_interval=self.end_date-self.start_date
         self.df = pdr.get_data_yahoo(self.name, start=self.start_date, end=self.end_date)
         self.df.drop(["Adj Close"],axis=1,inplace=True)
-        self.R = self.df['Close'].rolling(2).apply(lambda x: x[1]/x[0])-1    #Evaluate R_k,i = S_k,i/S_k-1,i
+        self.R = self.df['Close'].rolling(2).apply(lambda x: x[1]/x[0])-1    #Evaluate R_k,i = S_k,i/S_k-1,i TODO:replace Close with something better
         self.R.dropna(inplace=True)                                          #<----THIS IS UGLY
         print("start date   : {}".format(self.start_date))
         print("start date   : {}".format(self.end_date))
@@ -44,12 +45,44 @@ if __name__=="__main__":
     tau = 5             #sliding window 
     
     data = Data(name=ticker)
-    R   = data.get_data(startdate=start_date,enddate=end_date)
-    totlen = len(R)
+    history   = data.get_data(startdate=start_date,enddate=end_date)
+    totlen = len(history)
+    time   = int(floor(totlen/tau))
+    Nassets = len(ticker)
     Sigma = []
-    for i in range(floor(totlen/tau)):
-        init = i*tau
+    ExpectedReturn = []
+    print("inference time steps: {} ".format(time))
+    for k in range(floor(totlen/tau)):
+        init = k*tau
         end  = init+tau
-        Sigma.append(get_cov(R[init:end]))
+        Sigma.append(get_cov(np.transpose(history[init:end])))   #compute covariance matrix among assets
+        ExpectedReturn.append(np.mean(history[init:end],axis=0))  #compute expected return for each asset
         init = end
-    print(Sigma[0])
+
+    L = []
+    H = []
+    for k in range(floor(totlen/tau)):
+        Ltmp, Htmp = linalg.eigh(Sigma[k])
+        
+        L.append(Ltmp[::-1])                                                 # discending order
+        H.append(Htmp[:,::-1])                                               # discending order
+    
+        assert(np.sum([a>0 for a in L[k]]))                                  # healthy covariance check. Positive definite.
+        assert(np.sum(np.transpose(H[k]).dot(H[k]))-Nassets < 10**-10)      # orthonormality check. 
+        assert(np.sum(np.transpose(H[k]).dot(Sigma[k].dot(H[k])) - np.diag(L[k])) < 10**-10)
+    
+    SigmaP = []
+    LP = []
+    for k in range(floor(totlen/tau)):
+        LP.append([l/np.linalg.norm(H[k][:,n].dot(np.ones(Nassets)))**2 for n,l in enumerate(L[k])])
+        for i in range(Nassets):
+            H[k][:,i]=H[k][:,i]/(np.transpose(H[k][:,i]).dot(np.ones(Nassets)))
+        SigmaP.append(np.transpose(H[k]).dot(Sigma[k].dot(H[k])))
+        assert(np.sum([l < 10**-10 for l in LP[k] - np.diag(SigmaP[k])])-Nassets < 10**-10)
+
+    
+    SR = []
+    for k in range(floor(totlen/tau)):
+        for i in range(Nassets):
+            SR.append(H[k][:,i]*ExpectedReturn[k]/np.sqrt(LP[k][i])) 
+    print(SR)
