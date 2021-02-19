@@ -86,9 +86,9 @@ if __name__=="__main__":
     print(" Orthogonal Bandits Started")
     print("#"*20)
     
-    ticker = ['VOW.DE','BA', 'AMD', 'AAPL']
+    ticker = ['VOW.DE','BA', 'AMD', 'AAPL','GME','CVGW','CAMP','WSCI','LNDC','WOR']
     start_date=[2008, 9, 1]
-    end_date=[2008,12,31]
+    end_date=[2009,12,31]
     tau = 5                  #sliding window 
     Nsign=2                  #Significative portfolios 
     data = Data(name=ticker)
@@ -146,3 +146,16 @@ if __name__=="__main__":
     print('Mean Sharpe Ratio: {}({})'.format(Emu,Smu))
     cw = np.prod(np.array([m+1 for m in mu]))
     print('Cumulative Reward: {}'.format(cw))
+
+    
+    ccw = 1
+    history_cw = []
+    for k in range(time):
+        ccw *=mu[k]+1
+        history_cw.append(ccw)
+    
+    fig = plt.figure()
+    plt.plot(history_cw)
+    plt.xlabel('time')
+    plt.ylabel('Comulative Reward')
+    plt.show()
