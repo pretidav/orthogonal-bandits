@@ -37,9 +37,9 @@ def get_cov(data):
 def compute_stats(totlen,tau,history,k):    
     Sigma = []
     ExpectedReturn = []
-    init = k*tau
-    end  = init+tau-1
-    Sigma = get_cov(np.transpose(history[init:end]))   #compute covariance matrix among assets
+    init = k
+    end  = k+tau                         # NOTICE that: inference time t=k+tau is not included!
+    Sigma = get_cov(np.transpose(history[init:end]))    #compute covariance matrix among assets
     ExpectedReturn = np.mean(history[init:end],axis=0)  #compute expected return for each asset
     init = end
     return Sigma, ExpectedReturn
@@ -69,7 +69,7 @@ def get_sharpe_ratio(Nassets,H,ExpectedReturn,L):
 
 def ucb(R,t,N,tau):
     ca = float("inf")
-    d = [np.sqrt(float(2*np.log(t+tau)/(tau+N[i]))) if N[i]!=0 else ca for i in range(len(N))]
+    d = [np.sqrt(float(2*np.log(t+tau)/(tau+N[i]))) if (tau+N[i])!=0 else ca for i in range(len(N))]
     return np.random.choice(np.flatnonzero((R+d)==np.max(R+d)))
             
 def split_assets(Nsign,sr,L,H):
@@ -87,16 +87,17 @@ if __name__=="__main__":
     print("#"*20)
     
     ticker = ['VOW.DE','BA', 'AMD', 'AAPL','GME','CVGW','CAMP','WSCI','LNDC','WOR']
-    start_date=[2008, 9, 1]
-    end_date=[2009,12,31]
-    tau = 5                  #sliding window 
-    Nsign=2                  #Significative portfolios 
+    start_date=[2007, 9, 1]
+    end_date=[2009,12,9]
+    tau = 300                  #sliding window 
+    Nsign = 4                  #Significative portfolios 
     data = Data(name=ticker)
     history   = data.get_data(
                             startdate=start_date,
                             enddate=end_date)
     totlen = len(history)
-    time   = int(floor(totlen/tau))
+    print(' Effective available steps: {}'.format(totlen))
+    time   = int(floor(totlen-tau-1))
     Nassets = len(ticker)
     print("inference time steps: {} ".format(time))
     
@@ -136,18 +137,19 @@ if __name__=="__main__":
         w = (1-theta)*H_sign[:,best_assets[0]] + theta*H_insign[:,best_assets[1]]
         assert(np.sum(w)-1<10**-10)
 
-        kp1 = (k+1)*tau
+        kp1 = tau + k
         muk = np.sum(w*history[kp1])-1
         mu.append(muk)  
-        print("k {} --".format(k))
-        print("net return: {0:.2f} %".format(100*muk))
+        #print("k {} --".format(k))
+        #print('k: {} -- Weights: {}'.format(k,w))
+        #print("net return: {0:.2f} %".format(100*muk))
+
     Emu=np.mean(mu)
     Smu=np.std(mu)
     print('Mean Sharpe Ratio: {}({})'.format(Emu,Smu))
     cw = np.prod(np.array([m+1 for m in mu]))
     print('Cumulative Reward: {}'.format(cw))
 
-    
     ccw = 1
     history_cw = []
     for k in range(time):
