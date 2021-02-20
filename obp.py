@@ -88,9 +88,9 @@ if __name__=="__main__":
     
     ticker = ['VOW.DE','BA', 'AMD', 'AAPL','GME','CVGW','CAMP','WSCI','LNDC','WOR']
     start_date=[2007, 9, 1]
-    end_date=[2009,12,9]
-    tau = 300                  #sliding window 
-    Nsign = 4                  #Significative portfolios 
+    end_date=[2010,1,9]
+    tau = 500                  #sliding window 
+    Nsign = 3                  #Significative portfolios 
     data = Data(name=ticker)
     history   = data.get_data(
                             startdate=start_date,
@@ -103,6 +103,7 @@ if __name__=="__main__":
     
     N = [np.zeros(Nsign), np.zeros(Nassets-Nsign)]
     mu = []
+    muEW = []
     for k in range(time):
         Sigma,ExpectedReturn = compute_stats(
                                     totlen=totlen,
@@ -129,7 +130,7 @@ if __name__=="__main__":
         best_assets = [0,0]
         sets = [sr_sign, sr_insign]
         for ss,s in enumerate(sets):
-            ii = ucb(R=sr_sign,t=k,N=N[0],tau=tau)
+            ii = ucb(R=s,t=k,N=N[ss],tau=tau)
             N[ss][ii]+=1
             best_assets[ss]=ii
 
@@ -139,25 +140,40 @@ if __name__=="__main__":
 
         kp1 = tau + k
         muk = np.sum(w*history[kp1])-1
-        mu.append(muk)  
+        mukEW = np.sum(history[kp1]/Nassets)-1
+        mu.append(muk)
+        muEW.append(mukEW)  
         #print("k {} --".format(k))
         #print('k: {} -- Weights: {}'.format(k,w))
         #print("net return: {0:.2f} %".format(100*muk))
 
     Emu=np.mean(mu)
     Smu=np.std(mu)
-    print('Mean Sharpe Ratio: {}({})'.format(Emu,Smu))
+    print('Mean Sharpe Ratio: {}({}) normalized SR {}'.format(Emu,Smu,Emu/Smu))
     cw = np.prod(np.array([m+1 for m in mu]))
-    print('Cumulative Reward: {}'.format(cw))
+    cwEW = np.prod(np.array([m+1 for m in muEW]))
+    print('Cumulative Reward EW : {}'.format(cw))
+    print('Cumulative Reward OBL: {}'.format(cwEW))
+    
 
     ccw = 1
     history_cw = []
     for k in range(time):
-        ccw *=mu[k]+1
+        ccw *=(mu[k]+1)
         history_cw.append(ccw)
     
+    ccwEW = 1
+    history_cwEW = []
+    for k in range(time):
+        ccwEW *=(muEW[k]+1)
+        history_cwEW.append(ccwEW)
+    
+
     fig = plt.figure()
     plt.plot(history_cw)
+    plt.plot(history_cwEW)
+    plt.legend(['OBL','EW'])
     plt.xlabel('time')
     plt.ylabel('Comulative Reward')
+    plt.axhline(y=1, color='r', linestyle='--')
     plt.show()

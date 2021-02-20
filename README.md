@@ -11,5 +11,7 @@ Nsign = 4            #<- number of significant portfolios. To be tuned.
 
 Inference window is [start_date+tau+1:end_date].   
 
+![alt text](https://github.com/pretidav/orthogonal-bandits/raw/main/fig/OBPvsEW.png)
+
 Inspired by "Portfolio Choices with Orthogonal Bandit Learning" W. Shen et al. 2015. 
 
