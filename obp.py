@@ -103,7 +103,11 @@ if __name__=="__main__":
     
     N = [np.zeros(Nsign), np.zeros(Nassets-Nsign)]
     mu = []
+    mu_nss = []
     muEW = []
+    weights = []
+    weights_NSS = []
+    theta_hist = []
     for k in range(time):
         Sigma,ExpectedReturn = compute_stats(
                                     totlen=totlen,
@@ -136,24 +140,32 @@ if __name__=="__main__":
 
         theta = LP_sign[best_assets[0]]/(LP_sign[best_assets[0]] + LP_insign[best_assets[1]])
         w = (1-theta)*H_sign[:,best_assets[0]] + theta*H_insign[:,best_assets[1]]
+        weights.append(w)
         assert(np.sum(w)-1<10**-10)
+
+        #NO SHORT SELL ---
+        w_nss = [a if a>0 else 0 for a in w]
+        w_nss = w_nss/np.sum(w_nss)
+        weights_NSS.append(w_nss)
+        assert(np.sum(w_nss)-1<10**-10)
+        # ---- 
 
         kp1 = tau + k
         muk = np.sum(w*history[kp1])-1
+        muk_nss = np.sum(w_nss*history[kp1])-1
         mukEW = np.sum(history[kp1]/Nassets)-1
         mu.append(muk)
+        mu_nss.append(muk_nss)
         muEW.append(mukEW)  
-        #print("k {} --".format(k))
-        #print('k: {} -- Weights: {}'.format(k,w))
-        #print("net return: {0:.2f} %".format(100*muk))
-
+        theta_hist.append(theta)
+ 
     Emu=np.mean(mu)
     Smu=np.std(mu)
     print('Mean Sharpe Ratio: {}({}) normalized SR {}'.format(Emu,Smu,Emu/Smu))
-    cw = np.prod(np.array([m+1 for m in mu]))
-    cwEW = np.prod(np.array([m+1 for m in muEW]))
-    print('Cumulative Reward EW : {}'.format(cw))
-    print('Cumulative Reward OBL: {}'.format(cwEW))
+    #cw = np.prod(np.array([m+1 for m in mu]))
+    #cwEW = np.prod(np.array([m+1 for m in muEW]))
+    #print('Cumulative Reward EW : {}'.format(cw))
+    #print('Cumulative Reward OBL: {}'.format(cwEW))
     
 
     ccw = 1
@@ -161,7 +173,13 @@ if __name__=="__main__":
     for k in range(time):
         ccw *=(mu[k]+1)
         history_cw.append(ccw)
-    
+
+    ccw_nss = 1
+    history_cw_nss = []
+    for k in range(time):
+        ccw_nss *=(mu_nss[k]+1)
+        history_cw_nss.append(ccw_nss)
+
     ccwEW = 1
     history_cwEW = []
     for k in range(time):
@@ -171,9 +189,39 @@ if __name__=="__main__":
 
     fig = plt.figure()
     plt.plot(history_cw)
+    plt.plot(history_cw_nss)
     plt.plot(history_cwEW)
-    plt.legend(['OBL','EW'])
+    plt.legend(['OBL','OBL-no-shortsale','EW'])
     plt.xlabel('time')
     plt.ylabel('Comulative Reward')
     plt.axhline(y=1, color='r', linestyle='--')
-    plt.show()
+    plt.savefig('./fig/OBPvsEW.png')
+
+    fig = plt.figure()
+    plt.plot(theta_hist)
+    plt.xlabel('time')
+    plt.ylabel('theta mixing')
+    plt.axhline(y=1, color='r', linestyle='--')
+    plt.savefig('./fig/theta.png')
+    
+    fig = plt.figure()
+    plt.plot(np.dot(100,weights[:]))
+    plt.xlabel('time')
+    plt.ylabel('invested % of wealth')
+    plt.axhline(y=100/Nassets, color='b', linestyle=':')
+    plt.legend(ticker+['EW strategy'])
+    plt.axhline(y=0, color='r', linestyle='--')
+    plt.axhline(y=100, color='g', linestyle='--') 
+    plt.savefig('./fig/weights.png')
+
+    fig = plt.figure()
+    plt.plot(np.dot(100,weights_NSS[:]))
+    plt.xlabel('time')
+    plt.ylabel('invested % of wealth')
+    plt.axhline(y=100/Nassets, color='b', linestyle=':')
+    plt.legend(ticker+['EW strategy'])
+    plt.axhline(y=0, color='r', linestyle='--')
+    plt.axhline(y=100, color='g', linestyle='--') 
+    plt.savefig('./fig/weights_nss.png')
+    
+    
