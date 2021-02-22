@@ -88,7 +88,7 @@ if __name__=="__main__":
     
     ticker = ['VOW.DE','BA', 'AMD', 'AAPL','GME','CVGW','CAMP','WSCI','LNDC','WOR']
     start_date=[2007, 9, 1]
-    end_date=[2010,1,9]
+    end_date=[2020,1,9]
     tau = 500                  #sliding window 
     Nsign = 3                  #Significative portfolios 
     data = Data(name=ticker)
