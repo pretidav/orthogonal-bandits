@@ -17,16 +17,21 @@ class Data():
 
     def get_data(self,startdate,enddate):
         #input date format [2008,9,1]
+        name_no_cash=[x for x in self.name if x != "CASH"]
         self.start_date=datetime.datetime(startdate[0],startdate[1],startdate[2])
         self.end_date=datetime.datetime(enddate[0],enddate[1],enddate[2])
         self.time_interval=self.end_date-self.start_date
-        self.df = pdr.get_data_yahoo(self.name, start=self.start_date, end=self.end_date)
+        self.df = pdr.get_data_yahoo(name_no_cash, start=self.start_date, end=self.end_date)
         self.df.drop(["Adj Close"],axis=1,inplace=True)
         self.R = self.df['Close'].rolling(2).apply(lambda x: x[1]/x[0])      #Evaluate R_k,i = S_k,i/S_k-1,i TODO:replace Close with something better
         self.R.dropna(inplace=True)                                          #<----THIS IS UGLY
         print("start date   : {}".format(self.start_date))
         print("start date   : {}".format(self.end_date))
         print("time interval: {}".format(self.time_interval))
+        if "CASH" in self.name:
+            self.R["CASH"]= 0.99999*np.ones(len(self.R)) 
+        print(self.R)
+        print(self.R.to_numpy())
         return self.R.to_numpy()
 
 def get_cov(data):
@@ -86,10 +91,10 @@ if __name__=="__main__":
     print(" Orthogonal Bandits Started")
     print("#"*20)
     
-    ticker = ['VOW.DE','BA', 'AMD', 'AAPL','GME','CVGW','CAMP','WSCI','LNDC','WOR']
+    ticker = ["AAPL","AMZN","GME","CASH"]
     start_date=[2007, 9, 1]
     end_date=[2020,1,9]
-    tau = 500                  #sliding window 
+    tau = 240                  #sliding window 
     Nsign = 3                  #Significative portfolios 
     data = Data(name=ticker)
     history   = data.get_data(
